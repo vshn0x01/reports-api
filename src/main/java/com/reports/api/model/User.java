@@ -15,6 +15,11 @@ public class User {
     @Column(nullable = false, unique = true, length = 80)
     private String username;
 
+    @Column(name = "full_name")
+    private String fullName;
+
+    private String email;
+
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
@@ -27,6 +32,14 @@ public class User {
 
     public String getUsername() {
         return username;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public String getEmail() {
+        return email;
     }
 
     public String getPasswordHash() {

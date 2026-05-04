@@ -37,6 +37,13 @@ public class Report {
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    /**
+     * Native SELECT (or WITH … SELECT) run for Excel export; one statement only.
+     * Trusted DB admin content — see export validation in {@link com.reports.api.service.ReportService}.
+     */
+    @Column(name = "export_sql", columnDefinition = "text")
+    private String exportSql;
+
     public UUID getId() {
         return id;
     }
@@ -71,5 +78,9 @@ public class Report {
 
     public OffsetDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public String getExportSql() {
+        return exportSql;
     }
 }

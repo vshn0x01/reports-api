@@ -10,6 +10,7 @@ Spring Boot equivalent of the Python `reports.api` backend with:
 - `GET /health`
 - `POST /auth/login`
 - `GET /reports`
+- `GET /reports/filters`
 - `POST /reports/{reportId}/runs`
 - `GET /reports/runs`
 - `GET /reports/runs/{runId}/download`
@@ -39,3 +40,18 @@ Then test:
 ```bash
 curl http://localhost:8000/health
 ```
+
+Filter options endpoint:
+
+```bash
+curl -H "Authorization: Bearer <jwt-token>" \
+  "http://localhost:8000/reports/filters?sbuId=1&zoneId=2&clusterId=3&regionId=4&unitId=5"
+```
+
+All query params are optional. API returns scope-aware options for:
+`sbu`, `zone`, `cluster`, `region`, `unit`, `branch`.
+
+## Schema requirements
+
+For the region-level hierarchy and scoped filtering, apply:
+- `SCHEMA_REQUIREMENTS.sql`
