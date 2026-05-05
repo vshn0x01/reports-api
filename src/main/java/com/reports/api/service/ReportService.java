@@ -16,9 +16,11 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -53,23 +55,29 @@ public class ReportService {
     private final ReportRepository reportRepository;
     private final ReportRunRepository reportRunRepository;
     private final ReportRunFilterRepository reportRunFilterRepository;
+    private final ReportRunAuditService reportRunAuditService;
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
     private final long exportMaxRows;
+    private final Path exportStorageDir;
 
     public ReportService(
             UserRoleRepository userRoleRepository,
             ReportRepository reportRepository,
             ReportRunRepository reportRunRepository,
             ReportRunFilterRepository reportRunFilterRepository,
+            ReportRunAuditService reportRunAuditService,
             NamedParameterJdbcTemplate namedParameterJdbcTemplate,
-            @Value("${app.report.export.max-rows:100000}") long exportMaxRows
+            @Value("${app.report.export.max-rows:100000}") long exportMaxRows,
+            @Value("${app.report.export.storage-dir:storage/reports}") String exportStorageDir
     ) {
         this.userRoleRepository = userRoleRepository;
         this.reportRepository = reportRepository;
         this.reportRunRepository = reportRunRepository;
         this.reportRunFilterRepository = reportRunFilterRepository;
+        this.reportRunAuditService = reportRunAuditService;
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
         this.exportMaxRows = exportMaxRows;
+        this.exportStorageDir = Paths.get(exportStorageDir).toAbsolutePath().normalize();
     }
 
     /**
@@ -105,14 +113,61 @@ public class ReportService {
                 .addValue("unitId", unitId)
                 .addValue("branchId", branchId)
                 .addValue("branchCode", branchCode);
+        List<FilterItem> auditFilters = buildExportAuditFilters(
+                sbuId, zoneId, clusterId, regionId, unitId, branchId, branchCode);
         String fileName = sanitizeFileStem(report.getCode()) + ".xlsx";
+        ReportRun run = reportRunAuditService.start(userId, report.getId(), auditFilters);
         try {
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             streamQueryToXlsx(sql, exportParams, buffer);
-            return new ExcelExportDescriptor(fileName, buffer.toByteArray());
+            byte[] content = buffer.toByteArray();
+            Path storedPath = storeExportFile(run.getId(), fileName, content);
+            byte[] persistedContent = Files.readAllBytes(storedPath);
+            reportRunAuditService.markSuccess(run.getId(), storedPath.toString(), persistedContent.length);
+            return new ExcelExportDescriptor(fileName, persistedContent);
         } catch (IOException e) {
+            reportRunAuditService.markFailed(run.getId(), e.getMessage());
             throw new ResponseStatusException(INTERNAL_SERVER_ERROR, "Export failed");
+        } catch (RuntimeException e) {
+            reportRunAuditService.markFailed(run.getId(), e.getMessage());
+            throw e;
         }
+    }
+
+    private static List<FilterItem> buildExportAuditFilters(
+            Long sbuId,
+            Long zoneId,
+            Long clusterId,
+            Long regionId,
+            Long unitId,
+            Long branchId,
+            String branchCode
+    ) {
+        List<FilterItem> filters = new ArrayList<>();
+        addFilter(filters, "sbu_id", sbuId);
+        addFilter(filters, "zone_id", zoneId);
+        addFilter(filters, "cluster_id", clusterId);
+        addFilter(filters, "region_id", regionId);
+        addFilter(filters, "unit_id", unitId);
+        addFilter(filters, "branch_id", branchId);
+        if (branchCode != null && !branchCode.isBlank()) {
+            addFilter(filters, "branch_code", branchCode.trim());
+        }
+        return filters;
+    }
+
+    private static void addFilter(List<FilterItem> filters, String key, Object value) {
+        if (value != null) {
+            filters.add(new FilterItem(key, String.valueOf(value)));
+        }
+    }
+
+    private Path storeExportFile(UUID runId, String fileName, byte[] content) throws IOException {
+        Files.createDirectories(exportStorageDir);
+        String safeName = runId + "_" + fileName;
+        Path outputPath = exportStorageDir.resolve(safeName).normalize();
+        Files.write(outputPath, content);
+        return outputPath;
     }
 
     private String validateAndNormalizeExportSql(String raw) {

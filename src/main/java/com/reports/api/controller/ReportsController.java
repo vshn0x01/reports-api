@@ -1,6 +1,7 @@
 package com.reports.api.controller;
 
 import com.reports.api.dto.ExcelExportDescriptor;
+import com.reports.api.dto.LoanOutstandingDashboardMetrics;
 import com.reports.api.dto.LoanOutstandingSummaryRow;
 import com.reports.api.dto.ReportItemResponse;
 import com.reports.api.dto.ReportRunCreateRequest;
@@ -64,6 +65,31 @@ public class ReportsController {
     ) {
         UUID userId = currentUserId(authentication);
         return outstandingSummaryService.summaryByBranch(
+                userId,
+                sbuId,
+                zoneId,
+                clusterId,
+                regionId,
+                unitId,
+                firstNonNull(branchId, branchIdSnake),
+                branchCodeOrNull(branchCode, branchCodeSnake));
+    }
+
+    @GetMapping("/outstanding/dashboard")
+    public LoanOutstandingDashboardMetrics outstandingDashboard(
+            Authentication authentication,
+            @RequestParam(required = false) Long sbuId,
+            @RequestParam(required = false) Long zoneId,
+            @RequestParam(required = false) Long clusterId,
+            @RequestParam(required = false) Long regionId,
+            @RequestParam(required = false) Long unitId,
+            @RequestParam(required = false) Long branchId,
+            @RequestParam(value = "branch_id", required = false) Long branchIdSnake,
+            @RequestParam(required = false) String branchCode,
+            @RequestParam(value = "branch_code", required = false) String branchCodeSnake
+    ) {
+        UUID userId = currentUserId(authentication);
+        return outstandingSummaryService.dashboardMetrics(
                 userId,
                 sbuId,
                 zoneId,
